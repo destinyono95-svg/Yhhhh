@@ -2113,13 +2113,29 @@ function MystrixHub.Functions.StartKeeper()
                         if lvFlat > shotSpeed then shotSpeed = lvFlat end
                     end
 
+                    -- fast shots arrive higher than slow shots to the same target
+                    -- because gravity has less time to pull them. the solver
+                    -- reports the higher hy, which was pushing Mid-height
+                    -- blasts into the High band. subtract from hy for the
+                    -- HIGH check only, keep raw hy for the Low check so
+                    -- floor shots aren't affected.
+                    local tempSpeed = ballFlat / math.max(hit.t, 0.08)
+                    if plan.path and plan.path[2] then
+                        local dx = plan.path[2].pos.X - plan.from.X
+                        local dz = plan.path[2].pos.Z - plan.from.Z
+                        local dt = plan.path[2].t
+                        if dt > 0.01 then
+                            local v = math.sqrt(dx * dx + dz * dz) / dt
+                            if v > tempSpeed then tempSpeed = v end
+                        end
+                    end
+                    local hyHigh = hy - math.clamp((tempSpeed - 80) / 80, 0, 1.2)
+
                     local kind
                     if alat <= cfg.StandReach then
                         if hy >= 6.0 then kind = "Jump" end
                     elseif alat <= cfg.DiveRange then
-                        -- Low ceiling reverted 2.6 -> 2.8 so low shots route Low
-                        -- again instead of getting a flailing Mid dive.
-                        if hy >= 5.0 then
+                        if hyHigh >= 5.0 then
                             kind = "High"
                         elseif hy <= 2.9 then
                             kind = "Low"
