@@ -2131,9 +2131,35 @@ function MystrixHub.Functions.StartKeeper()
                     end
                     local hyHigh = hy - math.clamp((tempSpeed - 80) / 80, 0, 1.2)
 
+                    -- chip detect: ball coming down steep at intercept (lob arc).
+                    -- scan path samples around hit time for vertical descent rate.
+                    local isChip = false
+                    if plan.path and #plan.path >= 2 then
+                        local prev = { pos = plan.from, t = 0 }
+                        for _, e in ipairs(plan.path) do
+                            if e.t >= hit.t - 0.12 then
+                                local dt = e.t - prev.t
+                                if dt > 0.01 then
+                                    local vy = (e.pos.Y - prev.pos.Y) / dt
+                                    if vy < -18 then isChip = true end
+                                end
+                                break
+                            end
+                            prev = e
+                        end
+                    end
+
                     local kind
-                    if alat <= cfg.StandReach then
-                        if hy >= 6.0 then kind = "Jump" end
+                    -- Jump for: straight-at-you high ball, OR high central shot
+                    -- within reasonable reach, OR any chip arriving within dive range.
+                    -- jump covers overhead where a lateral dive would miss.
+                    local centralJumpReach = math.max(cfg.StandReach * 2.5, 4.5)
+                    if alat <= cfg.StandReach and hy >= 6.0 then
+                        kind = "Jump"
+                    elseif alat <= centralJumpReach and hyHigh >= 6.5 then
+                        kind = "Jump"
+                    elseif isChip and alat <= cfg.DiveRange * 0.6 and hy >= 4.5 then
+                        kind = "Jump"
                     elseif alat <= cfg.DiveRange then
                         if hyHigh >= 5.0 then
                             kind = "High"
