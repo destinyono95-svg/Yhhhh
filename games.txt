@@ -2194,6 +2194,7 @@ function MystrixHub.Functions.StartKeeper()
                         if rem > -0.08 and rem <= fireAt then
                             local lateral = Vector3.new(0, 0, lat >= 0 and 1 or -1)
                             if F.KeeperDive(char, kind, lateral) then
+                                F.SimulateDiveButton(kind)
                                 st.DiveNext = now + (kind == "Jump" and 0.8 or 1.5)
                             else
                                 st.DiveNext = now + 0.06
@@ -4547,6 +4548,66 @@ function MystrixHub.Functions.KeeperDivesModule()
         return mod
     end
     return nil
+end
+
+function MystrixHub.Functions.KeeperDiveInputs()
+    local H = MystrixHub
+    local cache = H.KeeperDiveInputCache
+    if cache and os.clock() - cache.At < 5 then
+        local ok = true
+        for _, a in pairs(cache.Actions) do
+            if not a.Parent then ok = false break end
+        end
+        if ok then return cache.Actions end
+    end
+    local actions = {}
+    local scripts = LocalPlayer:FindFirstChild("PlayerScripts")
+    if scripts then
+        local ctx = scripts:FindFirstChild("KeeperDives")
+        if ctx then
+            for _, child in ipairs(ctx:GetChildren()) do
+                if child:IsA("InputAction") then
+                    actions[child.Name] = child
+                end
+            end
+        end
+    end
+    H.KeeperDiveInputCache = { At = os.clock(), Actions = actions }
+    return actions
+end
+
+function MystrixHub.Functions.SimulateDiveButton(kind)
+    local F = MystrixHub.Functions
+    -- mobile-button map. Jump reads as an overhead high save.
+    local map = { Jump = "SimpleHigh", High = "SimpleHigh", Mid = "SimpleMedium", Low = "SimpleLow", Smother = "Smother" }
+    local name = map[kind]
+    if not name then return end
+    local actions = F.KeeperDiveInputs()
+    local action = actions[name]
+    if not (action and action:IsA("InputAction")) then return end
+    local H = MystrixHub
+    local bindings = H.DiveSimBindings
+    if not bindings then
+        bindings = {}
+        H.DiveSimBindings = bindings
+        H.ConnectionController.Insert({ Disconnect = function()
+            for _, b in pairs(bindings) do pcall(function() b:Destroy() end) end
+            H.DiveSimBindings = nil
+        end })
+    end
+    local binding = bindings[name]
+    if not (binding and binding.Parent == action) then
+        if binding then pcall(function() binding:Destroy() end) end
+        binding = Instance.new("InputBinding")
+        binding.Name = "MystrixDiveSim" .. name
+        binding.Type = Enum.InputBindingType.Scriptable
+        binding.Parent = action
+        bindings[name] = binding
+    end
+    pcall(function() binding:Fire(true) end)
+    task.delay(0.08, function()
+        pcall(function() binding:Fire(false) end)
+    end)
 end
 
 function MystrixHub.Functions.KeeperDiveTouch(kind)
